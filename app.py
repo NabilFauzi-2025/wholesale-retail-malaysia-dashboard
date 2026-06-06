@@ -758,7 +758,12 @@ with tab5:
 
     saved_forecast = pd.read_csv(forecast_file)
 
-    required_columns = ["division", "division_label", "date", "forecasted_sales"]
+    required_columns = [
+        "division",
+        "division_label",
+        "date",
+        "forecasted_sales"
+    ]
 
     missing_columns = [
         col for col in required_columns
@@ -769,7 +774,10 @@ with tab5:
         st.error(f"forecast_output.csv is missing these columns: {missing_columns}")
         st.stop()
 
-    saved_forecast["date"] = pd.to_datetime(saved_forecast["date"], errors="coerce")
+    saved_forecast["date"] = pd.to_datetime(
+        saved_forecast["date"],
+        errors="coerce"
+    )
 
     saved_forecast["division_label"] = (
         saved_forecast["division_label"]
@@ -833,6 +841,7 @@ with tab5:
         name="Actual Historical Sales",
         line=dict(color="#16D9FF", width=3),
         marker=dict(size=6),
+        connectgaps=True,
         hovertemplate="Date=%{x}<br>Actual Sales=RM %{y:,.2f}<extra></extra>"
     ))
 
@@ -841,8 +850,9 @@ with tab5:
         y=forecast_df["forecasted_sales"],
         mode="lines+markers",
         name="Baseline Future Forecast",
-        line=dict(color="#F9D423", width=3, dash="dash"),
-        marker=dict(size=8),
+        line=dict(color="#F9D423", width=4, dash="dash"),
+        marker=dict(size=9),
+        connectgaps=True,
         hovertemplate="Date=%{x}<br>Forecasted Sales=RM %{y:,.2f}<extra></extra>"
     ))
 
@@ -865,26 +875,38 @@ with tab5:
         forecast_df["forecasted_sales"].max()
     )
 
-    y_padding = (max_y - min_y) * 0.15
+    y_padding = (max_y - min_y) * 0.18
+
+    x_start = historical_df["date"].min()
+    x_end = forecast_df["date"].max() + pd.DateOffset(months=2)
 
     fig_forecast.update_layout(
         title=f"{selected_forecast_division} 12 Month Future Baseline Forecast",
-        height=520,
+        height=650,
         template="plotly_dark",
         paper_bgcolor="#292B60",
         plot_bgcolor="#292B60",
         hovermode="x unified",
         xaxis_title="Date",
         yaxis_title="Sales (RM)",
+        xaxis=dict(
+            range=[x_start, x_end]
+        ),
         yaxis=dict(
             range=[min_y - y_padding, max_y + y_padding]
         ),
         legend=dict(
-            orientation="v",
+            orientation="h",
             yanchor="top",
-            y=0.98,
-            xanchor="right",
-            x=0.98
+            y=-0.18,
+            xanchor="center",
+            x=0.5
+        ),
+        margin=dict(
+            l=70,
+            r=40,
+            t=90,
+            b=130
         )
     )
 
