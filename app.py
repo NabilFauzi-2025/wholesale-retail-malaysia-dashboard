@@ -757,7 +757,6 @@ with tab5:
         st.stop()
 
     saved_forecast = pd.read_csv(forecast_file)
-    saved_forecast["date"] = pd.to_datetime(saved_forecast["date"])
 
     required_columns = ["division", "division_label", "date", "forecasted_sales"]
 
@@ -769,6 +768,31 @@ with tab5:
     if missing_columns:
         st.error(f"forecast_output.csv is missing these columns: {missing_columns}")
         st.stop()
+
+    saved_forecast["date"] = pd.to_datetime(saved_forecast["date"], errors="coerce")
+
+    saved_forecast["division_label"] = (
+        saved_forecast["division_label"]
+        .astype(str)
+        .str.strip()
+    )
+
+    saved_forecast["forecasted_sales"] = (
+        saved_forecast["forecasted_sales"]
+        .astype(str)
+        .str.replace("RM", "", regex=False)
+        .str.replace(",", "", regex=False)
+        .str.strip()
+    )
+
+    saved_forecast["forecasted_sales"] = pd.to_numeric(
+        saved_forecast["forecasted_sales"],
+        errors="coerce"
+    )
+
+    saved_forecast = saved_forecast.dropna(
+        subset=["division_label", "date", "forecasted_sales"]
+    )
 
     forecast_base = df[df["series"] == "abs"].copy()
 
@@ -788,6 +812,13 @@ with tab5:
     ].copy()
 
     forecast_df = forecast_df.sort_values("date")
+
+    if forecast_df.empty:
+        st.error(
+            f"No forecast values found for {selected_forecast_division}. "
+            "Please check forecast_output.csv."
+        )
+        st.stop()
 
     forecast_df["forecasted_sales_rm"] = forecast_df["forecasted_sales"].apply(
         lambda x: fmt_rm(x, 2)
@@ -811,19 +842,30 @@ with tab5:
         mode="lines+markers",
         name="Baseline Future Forecast",
         line=dict(color="#F9D423", width=3, dash="dash"),
-        marker=dict(size=7),
+        marker=dict(size=8),
         hovertemplate="Date=%{x}<br>Forecasted Sales=RM %{y:,.2f}<extra></extra>"
     ))
 
-    if not forecast_df.empty:
-        forecast_start = forecast_df["date"].min()
+    forecast_start = forecast_df["date"].min()
 
-        fig_forecast.add_vline(
-            x=forecast_start,
-            line_width=2,
-            line_dash="dot",
-            line_color="#FF4D6D"
-        )
+    fig_forecast.add_vline(
+        x=forecast_start,
+        line_width=2,
+        line_dash="dot",
+        line_color="#FF4D6D"
+    )
+
+    min_y = min(
+        historical_df["sales"].min(),
+        forecast_df["forecasted_sales"].min()
+    )
+
+    max_y = max(
+        historical_df["sales"].max(),
+        forecast_df["forecasted_sales"].max()
+    )
+
+    y_padding = (max_y - min_y) * 0.15
 
     fig_forecast.update_layout(
         title=f"{selected_forecast_division} 12 Month Future Baseline Forecast",
@@ -834,6 +876,9 @@ with tab5:
         hovermode="x unified",
         xaxis_title="Date",
         yaxis_title="Sales (RM)",
+        yaxis=dict(
+            range=[min_y - y_padding, max_y + y_padding]
+        ),
         legend=dict(
             orientation="v",
             yanchor="top",
