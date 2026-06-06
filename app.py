@@ -745,7 +745,10 @@ with tab4:
 
 with tab5:
 
-    st.markdown('<div class="top-strip">Sales Forecasting Output</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="top-strip">12 Month Future Baseline Forecast</div>',
+        unsafe_allow_html=True
+    )
 
     forecast_file = "forecast_output.csv"
 
@@ -756,56 +759,88 @@ with tab5:
     saved_forecast = pd.read_csv(forecast_file)
     saved_forecast["date"] = pd.to_datetime(saved_forecast["date"])
 
-    if "forecasted_sales" not in saved_forecast.columns:
-        st.error("The forecast file must contain a column named forecasted_sales.")
+    required_columns = ["division", "division_label", "date", "forecasted_sales"]
+
+    missing_columns = [
+        col for col in required_columns
+        if col not in saved_forecast.columns
+    ]
+
+    if missing_columns:
+        st.error(f"forecast_output.csv is missing these columns: {missing_columns}")
         st.stop()
 
     forecast_base = df[df["series"] == "abs"].copy()
 
     selected_forecast_division = st.selectbox(
-        "Select division for historical sales display",
-        options=sorted(forecast_base["division_label"].dropna().unique())
+        "Select division for forecast display",
+        options=sorted(saved_forecast["division_label"].dropna().unique())
     )
 
-    model_df = forecast_base[
+    historical_df = forecast_base[
         forecast_base["division_label"] == selected_forecast_division
     ].copy()
 
-    model_df = model_df.sort_values("date").reset_index(drop=True)
+    historical_df = historical_df.sort_values("date")
 
-    saved_forecast["forecasted_sales_rm"] = saved_forecast["forecasted_sales"].apply(
+    forecast_df = saved_forecast[
+        saved_forecast["division_label"] == selected_forecast_division
+    ].copy()
+
+    forecast_df = forecast_df.sort_values("date")
+
+    forecast_df["forecasted_sales_rm"] = forecast_df["forecasted_sales"].apply(
         lambda x: fmt_rm(x, 2)
     )
 
     fig_forecast = go.Figure()
 
     fig_forecast.add_trace(go.Scatter(
-        x=model_df["date"],
-        y=model_df["sales"],
-        mode="lines",
-        name="Historical Sales",
-        line=dict(color="#22E17F", width=3),
-        hovertemplate="Date=%{x}<br>Historical Sales=RM %{y:,.2f}<extra></extra>"
+        x=historical_df["date"],
+        y=historical_df["sales"],
+        mode="lines+markers",
+        name="Actual Historical Sales",
+        line=dict(color="#16D9FF", width=3),
+        marker=dict(size=6),
+        hovertemplate="Date=%{x}<br>Actual Sales=RM %{y:,.2f}<extra></extra>"
     ))
 
     fig_forecast.add_trace(go.Scatter(
-        x=saved_forecast["date"],
-        y=saved_forecast["forecasted_sales"],
+        x=forecast_df["date"],
+        y=forecast_df["forecasted_sales"],
         mode="lines+markers",
-        name="Forecasted Sales",
-        line=dict(color="#FF4D6D", width=3, dash="dash"),
+        name="Baseline Future Forecast",
+        line=dict(color="#F9D423", width=3, dash="dash"),
+        marker=dict(size=7),
         hovertemplate="Date=%{x}<br>Forecasted Sales=RM %{y:,.2f}<extra></extra>"
     ))
 
+    if not forecast_df.empty:
+        forecast_start = forecast_df["date"].min()
+
+        fig_forecast.add_vline(
+            x=forecast_start,
+            line_width=2,
+            line_dash="dot",
+            line_color="#FF4D6D"
+        )
+
     fig_forecast.update_layout(
-        title="Future Sales Forecast Based on Original Notebook Output",
-        height=480,
+        title=f"{selected_forecast_division} 12 Month Future Baseline Forecast",
+        height=520,
         template="plotly_dark",
         paper_bgcolor="#292B60",
         plot_bgcolor="#292B60",
         hovermode="x unified",
         xaxis_title="Date",
-        yaxis_title="Sales (RM)"
+        yaxis_title="Sales (RM)",
+        legend=dict(
+            orientation="v",
+            yanchor="top",
+            y=0.98,
+            xanchor="right",
+            x=0.98
+        )
     )
 
     st.plotly_chart(fig_forecast, use_container_width=True)
@@ -813,11 +848,11 @@ with tab5:
     st.subheader("Forecasted Sales Table")
 
     st.dataframe(
-        saved_forecast[["date", "forecasted_sales_rm"]],
+        forecast_df[["division_label", "date", "forecasted_sales_rm"]],
         use_container_width=True
     )
 
-    forecast_csv = saved_forecast.to_csv(index=False).encode("utf-8")
+    forecast_csv = forecast_df.to_csv(index=False).encode("utf-8")
 
     st.download_button(
         label="Download Forecast Result",
@@ -827,7 +862,7 @@ with tab5:
     )
 
     st.success(
-        "This forecast output is loaded directly from the original forecasting notebook, so the displayed values match the notebook results."
+        "The forecast values are loaded from forecast_output.csv, so the dashboard uses the same forecast values provided by the original forecasting result."
     )
 
 
