@@ -745,20 +745,26 @@ with tab4:
 
 with tab5:
 
-    st.markdown('<div class="top-strip">Sales Forecasting Model</div>', unsafe_allow_html=True)
+    st.markdown('<div class="top-strip">Sales Forecasting Output</div>', unsafe_allow_html=True)
+
+    forecast_file = "forecast_output.csv"
+
+    if not os.path.exists(forecast_file):
+        st.error("forecast_output.csv not found. Please upload the forecast output file to GitHub.")
+        st.stop()
+
+    saved_forecast = pd.read_csv(forecast_file)
+    saved_forecast["date"] = pd.to_datetime(saved_forecast["date"])
+
+    if "forecasted_sales" not in saved_forecast.columns:
+        st.error("The forecast file must contain a column named forecasted_sales.")
+        st.stop()
 
     forecast_base = df[df["series"] == "abs"].copy()
 
     selected_forecast_division = st.selectbox(
-        "Select division for forecasting",
+        "Select division for historical sales display",
         options=sorted(forecast_base["division_label"].dropna().unique())
-    )
-
-    forecast_months = st.slider(
-        "Number of months to forecast",
-        min_value=3,
-        max_value=24,
-        value=12
     )
 
     model_df = forecast_base[
@@ -767,119 +773,9 @@ with tab5:
 
     model_df = model_df.sort_values("date").reset_index(drop=True)
 
-    model_df["time_index"] = np.arange(len(model_df))
-    model_df["year"] = model_df["date"].dt.year
-    model_df["month"] = model_df["date"].dt.month
-    model_df["quarter"] = model_df["date"].dt.quarter
-
-    features = ["time_index", "year", "month", "quarter"]
-    target = "sales"
-
-    X = model_df[features]
-    y = model_df[target]
-
-    split_index = int(len(model_df) * 0.8)
-
-    X_train = X.iloc[:split_index]
-    X_test = X.iloc[split_index:]
-    y_train = y.iloc[:split_index]
-    y_test = y.iloc[split_index:]
-
-    model = RandomForestRegressor(
-        n_estimators=300,
-        random_state=42,
-        min_samples_leaf=2
+    saved_forecast["forecasted_sales_rm"] = saved_forecast["forecasted_sales"].apply(
+        lambda x: fmt_rm(x, 2)
     )
-
-    model.fit(X_train, y_train)
-
-    y_pred = model.predict(X_test)
-
-    mae = mean_absolute_error(y_test, y_pred)
-    rmse = np.sqrt(mean_squared_error(y_test, y_pred))
-    r2 = r2_score(y_test, y_pred)
-
-    m1, m2, m3 = st.columns(3)
-
-    with m1:
-        st.markdown(f"""
-        <div class="panel">
-            <div class="card-title">MAE</div>
-            <div class="card-value-medium">{fmt_rm(mae, 2)}</div>
-            <div class="card-label">Mean Absolute Error</div>
-        </div>
-        """, unsafe_allow_html=True)
-
-    with m2:
-        st.markdown(f"""
-        <div class="panel">
-            <div class="card-title">RMSE</div>
-            <div class="card-value-medium">{fmt_rm(rmse, 2)}</div>
-            <div class="card-label">Root Mean Squared Error</div>
-        </div>
-        """, unsafe_allow_html=True)
-
-    with m3:
-        st.markdown(f"""
-        <div class="panel">
-            <div class="card-title">R² Score</div>
-            <div class="card-value-medium">{r2:.3f}</div>
-            <div class="card-label">Model fit score</div>
-        </div>
-        """, unsafe_allow_html=True)
-
-    test_result = model_df.iloc[split_index:].copy()
-    test_result["predicted_sales"] = y_pred
-
-    fig_prediction = go.Figure()
-
-    fig_prediction.add_trace(go.Scatter(
-        x=test_result["date"],
-        y=test_result["sales"],
-        mode="lines+markers",
-        name="Actual Sales",
-        line=dict(color="#16D9FF", width=3),
-        hovertemplate="Date=%{x}<br>Actual Sales=RM %{y:,.2f}<extra></extra>"
-    ))
-
-    fig_prediction.add_trace(go.Scatter(
-        x=test_result["date"],
-        y=test_result["predicted_sales"],
-        mode="lines+markers",
-        name="Predicted Sales",
-        line=dict(color="#F9D423", width=3),
-        hovertemplate="Date=%{x}<br>Predicted Sales=RM %{y:,.2f}<extra></extra>"
-    ))
-
-    fig_prediction.update_layout(
-        title=f"Actual vs Predicted Sales: {selected_forecast_division}",
-        height=480,
-        template="plotly_dark",
-        paper_bgcolor="#292B60",
-        plot_bgcolor="#292B60",
-        hovermode="x unified",
-        xaxis_title="Date",
-        yaxis_title="Sales (RM)"
-    )
-
-    st.plotly_chart(fig_prediction, use_container_width=True)
-
-    last_date = model_df["date"].max()
-
-    future_dates = pd.date_range(
-        start=last_date + pd.DateOffset(months=1),
-        periods=forecast_months,
-        freq="MS"
-    )
-
-    future_df = pd.DataFrame({"date": future_dates})
-    future_df["time_index"] = np.arange(len(model_df), len(model_df) + forecast_months)
-    future_df["year"] = future_df["date"].dt.year
-    future_df["month"] = future_df["date"].dt.month
-    future_df["quarter"] = future_df["date"].dt.quarter
-
-    future_df["forecasted_sales"] = model.predict(future_df[features])
-    future_df["forecasted_sales_rm"] = future_df["forecasted_sales"].apply(lambda x: fmt_rm(x, 2))
 
     fig_forecast = go.Figure()
 
@@ -893,8 +789,8 @@ with tab5:
     ))
 
     fig_forecast.add_trace(go.Scatter(
-        x=future_df["date"],
-        y=future_df["forecasted_sales"],
+        x=saved_forecast["date"],
+        y=saved_forecast["forecasted_sales"],
         mode="lines+markers",
         name="Forecasted Sales",
         line=dict(color="#FF4D6D", width=3, dash="dash"),
@@ -902,7 +798,7 @@ with tab5:
     ))
 
     fig_forecast.update_layout(
-        title=f"Future Sales Forecast: {selected_forecast_division}",
+        title="Future Sales Forecast Based on Original Notebook Output",
         height=480,
         template="plotly_dark",
         paper_bgcolor="#292B60",
@@ -915,12 +811,13 @@ with tab5:
     st.plotly_chart(fig_forecast, use_container_width=True)
 
     st.subheader("Forecasted Sales Table")
+
     st.dataframe(
-        future_df[["date", "forecasted_sales_rm"]],
+        saved_forecast[["date", "forecasted_sales_rm"]],
         use_container_width=True
     )
 
-    forecast_csv = future_df.to_csv(index=False).encode("utf-8")
+    forecast_csv = saved_forecast.to_csv(index=False).encode("utf-8")
 
     st.download_button(
         label="Download Forecast Result",
@@ -929,7 +826,9 @@ with tab5:
         mime="text/csv"
     )
 
-    st.success("Decision-making value: The forecast helps users anticipate future trade performance and support economic planning under SDG 8.")
+    st.success(
+        "This forecast output is loaded directly from the original forecasting notebook, so the displayed values match the notebook results."
+    )
 
 
 # =====================================================
